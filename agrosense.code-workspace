@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "AgroSense_ESP32",
+      "path": "firmware/AgroSense_ESP32"
+    },
+    {
+      "name": "AgroNode_Arduino",
+      "path": "firmware/AgroNode_Arduino"
+    }
+  ],
+  "settings": {}
+}

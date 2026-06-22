@@ -1,50 +1,38 @@
-# Prerequisites
-*.d
+# PlatformIO build output
+.pio/
+*.pio/
 
-# Compiled Object files
-*.slo
-*.lo
+# VS Code — keep extensions.json so recommended extensions are shared
+.vscode/*
+!.vscode/extensions.json
+
+# Compiled / linked artefacts
+build/
+Build/
+build-*/
 *.o
 *.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
+*.elf
+*.bin
+*.hex
+*.map
+*.slo
+*.lo
 *.ilk
-
-# Debugger Files
 *.pdb
-
-# Compiled Dynamic libraries
 *.so
+*.so.*
 *.dylib
 *.dll
-*.so.*
-
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
 *.lai
 *.la
 *.a
 *.lib
-
-# Executables
 *.exe
 *.out
 *.app
 
-# Build directories
-build/
-Build/
-build-*/
-
-# CMake generated files
+# CMake
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
@@ -52,18 +40,26 @@ Makefile
 install_manifest.txt
 compile_commands.json
 
-# Temporary files
+# Node-RED credential files (contain secrets)
+node-red/*_cred.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temp / debug
 *.tmp
 *.log
 *.bak
 *.swp
-
-# vcpkg
-vcpkg_installed/
-
-# debug information files
 *.dwo
-
-# test output & cache
+*~
 Testing/
 .cache/
+vcpkg_installed/
