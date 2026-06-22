@@ -9,49 +9,48 @@ void bufPush(const String& topic, const String& payload){
   buf[bufHead]=payload; bufTopic[bufHead]=topic;
   bufHead=(bufHead+1)%BUF_SIZE;
   if(bufCount<BUF_SIZE) bufCount++;
+  Serial.print("BUFFERED, count="); Serial.println(bufCount);
 }
-void bufReplay(){                       // A11: send buffered data on reconnect (feeds D8)
-  int idx=(bufHead - bufCount + BUF_SIZE)%BUF_SIZE;
-  for(int i=0;i<bufCount;i++){
-    mqtt.publish(bufTopic[idx].c_str(), buf[idx].c_str());
-    idx=(idx+1)%BUF_SIZE;
-    delay(20);
+
+void bufReplay(){
+  int n = bufCount;                       // capture before anything changes it
+  if(n == 0){ Serial.println("REPLAY: nothing to send"); return; }
+  Serial.print("REPLAYING "); Serial.print(n); Serial.println(" buffered msgs");
+  int idx = (bufHead - n + BUF_SIZE) % BUF_SIZE;
+  for(int i=0;i<n;i++){
+    bool ok = mqtt.publish(bufTopic[idx].c_str(), buf[idx].c_str());
+    Serial.print("  replay "); Serial.print(i+1); Serial.print("/"); Serial.print(n);
+    Serial.println(ok ? " sent" : " FAILED");
+    idx = (idx+1) % BUF_SIZE;
+    mqtt.loop();                          // keep the MQTT client serviced
+    delay(60);                            // pace it — public broker throttles bursts
   }
-  bufCount=0;
-  publishAlert("info", SELF_FIELD, "Replayed buffered data after reconnect");
+  bufCount = 0;                           // clear only AFTER successfully sending
 }
 
 void wifiConnect(){
+  static unsigned long lastTry=0;
   if(WiFi.status()==WL_CONNECTED) return;
-  WiFi.mode(WIFI_STA); WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("WiFi");
-  unsigned long t0=millis();
-  while(WiFi.status()!=WL_CONNECTED && millis()-t0<8000){ delay(300); Serial.print("."); }
-  if(WiFi.status()==WL_CONNECTED) {
-    Serial.println(" ok (Waiting for internet routing...)");
-    delay(2000); // Give the hotspot 2 seconds to establish internet/DNS
-  } else {
-    Serial.println(" FAILED (buffering)");
-  }
+  if(millis()-lastTry < 2000) return;   // nudge every 2s; autoReconnect does the rest
+  lastTry=millis();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
 void mqttConnect(){
-  if(WiFi.status()!=WL_CONNECTED) return;
-  if(mqtt.connect(MQTT_CLIENT, NULL, NULL, T_STATUS_GW, 1, true, "OFFLINE")){
-    mqtt.publish(T_STATUS_GW, "ONLINE", true);
-    // ... subscriptions ...
-    Serial.println("MQTT connected");
-    if(bufCount > 0) {
-        Serial.print("Attempting to replay ");
-        Serial.print(bufCount);
-        Serial.println(" buffered packets.");
-        bufReplay(); 
-    }
+  static unsigned long lastTry=0;
+  if(WiFi.status()!=WL_CONNECTED || mqtt.connected()) return;
+  if(millis()-lastTry < 2000) return;    // retry every 2s instead of waiting
+  lastTry=millis();
+  mqtt.setSocketTimeout(2);              // cap the blocking attempt at 2s
+  mqtt.setKeepAlive(10);                 // detect a dead link in ~10s not 15s
+  String cid = String(MQTT_CLIENT) + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+  if(mqtt.connect(cid.c_str())){
     mqtt.subscribe(T_CMD_VALVE); mqtt.subscribe(T_CMD_MODE);
     mqtt.subscribe(T_CMD_THR);   mqtt.subscribe(T_CMD_BIND);
     mqtt.subscribe(T_CMD_WX);
-    Serial.println("MQTT connected");
-    if(bufCount>0) bufReplay();         // flush offline buffer
+    Serial.println("MQTT OK");
+    // subscribes...
+    if(bufCount>0) bufReplay();      // only here, only on success
   }
 }
 

@@ -44,8 +44,12 @@ void setup() {
   
   // valveServo.attach(PIN_SERVO); // <-- COMMENTED OUT
   // setValve(false);              // <-- COMMENTED OUT
-
+  
   wifiConnect();
+  // in setup(), right after the first wifiConnect(); call:
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
+
   configTime(19800, 0, "pool.ntp.org");   // UTC+5:30 (Sri Lanka)
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMqtt);
@@ -64,7 +68,7 @@ void loop() {
   mqtt.loop();
 
   //loraReceive();                 // handle node packets (data/join/heartbeat)
-
+  
   unsigned long now=millis();
 
   // sensor read: 2000 ms cadence (DHT11 is slow)

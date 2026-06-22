@@ -17,7 +17,7 @@
 
 // ---- Pins (ESP32 DevKit v1). All analog pins are ADC1 (Wi-Fi safe). ----
 #define PIN_DHT        4
-#define PIN_SOIL       34   // analog, input-only
+#define PIN_SOIL       33   // analog, input-only
 #define PIN_RAIN       35   // analog (AO of rain board), input-only
 #define PIN_LDR        32   // analog
 #define PIN_SERVO      13
