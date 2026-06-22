@@ -1,0 +1,68 @@
+#include "agro.h"
+/* ===== sensors.ino — A1 (read/normalize), A3 (moving average), A12 (faults), A2 (OLED) ===== */
+
+// moving-average ring buffers (A3)
+float maSoil[MA_N], maTemp[MA_N];
+int   maIdx=0; bool maFilled=false;
+
+float movingAvg(float *buf){
+  int n = maFilled ? MA_N : (maIdx==0?1:maIdx);
+  float s=0; for(int i=0;i<n;i++) s+=buf[i];
+  return s/n;
+}
+
+// fault detection history (A12)
+float lastSoil=-999; int stuckCount=0;
+
+void readSensors(){
+  // --- raw ---
+  float t = dht.readTemperature();
+  float h = dht.readHumidity();
+  int soilRaw = analogRead(PIN_SOIL);
+  int rainRaw = analogRead(PIN_RAIN);
+  int ldrRaw  = analogRead(PIN_LDR);
+
+  // --- normalize to meaningful units (A1) ---
+  float soilPct = map(constrain(soilRaw, SOIL_WET_ADC, SOIL_DRY_ADC),
+                      SOIL_DRY_ADC, SOIL_WET_ADC, 0, 100);          // 0 dry .. 100 wet
+  float lightPct= map(constrain(ldrRaw, LDR_DARK_ADC, LDR_BRIGHT_ADC),
+                      LDR_DARK_ADC, LDR_BRIGHT_ADC, 0, 100);
+  rain = (rainRaw < RAIN_WET_ADC);
+
+  // --- fault detection (A12): out-of-range or stuck ---
+  bool oor = isnan(t) || isnan(h) || t<-10 || t>70 || soilPct<0 || soilPct>100;
+  if (fabs(soilPct - lastSoil) < 0.5) stuckCount++; else stuckCount=0;
+  lastSoil = soilPct;
+  bool stuck = (stuckCount >= 8);
+  bool nowFault = oor || stuck;
+  if (nowFault && !sensorFault)
+     publishAlert("error", SELF_FIELD, oor ? "Sensor out-of-range" : "Sensor stuck");
+  sensorFault = nowFault;
+
+  if (!isnan(t)) temp = t;
+  if (!isnan(h)) hum  = h;
+
+  // --- moving average (A3) ---
+  maSoil[maIdx]=soilPct; maTemp[maIdx]=temp;
+  maIdx=(maIdx+1)%MA_N; if(maIdx==0) maFilled=true;
+  moist = movingAvg(maSoil);
+  light = lightPct;
+}
+
+// ---- OLED (A2) ----
+void oledInit(){
+  if(!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)){ Serial.println("OLED fail"); return; }
+  oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE);
+  oled.setTextSize(1); oled.setCursor(0,0);
+  oled.println("AgroSense V2"); oled.display();
+}
+void oledShow(){
+  oled.clearDisplay(); oled.setCursor(0,0);
+  oled.printf("AgroSense  %s\n", selfMode.c_str());
+  oled.printf("T:%.1fC  H:%.0f%%\n", temp, hum);
+  oled.printf("Soil:%.0f%%  L:%.0f%%\n", moist, light);
+  oled.printf("Rain:%s  Scr:%d\n", rain?"YES":"no", score);
+  oled.printf("Valve: %s\n", valveOpen?"OPEN":"CLOSED");
+  if(sensorFault) oled.print("** SENSOR FAULT **");
+  oled.display();
+}
