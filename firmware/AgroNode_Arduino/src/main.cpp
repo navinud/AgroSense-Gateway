@@ -38,7 +38,7 @@ void setup(){
   if(bound){ Serial.print("[LoRa] node binded as "); Serial.println(FIELD); }
 }
 
-unsigned long tData=0, tHb=0, tJoin=0;
+unsigned long tData=0, tJoin=0;
 
 void loop(){
   checkRebindButton();     // B5
@@ -51,9 +51,7 @@ void loop(){
     if(now - tJoin > JOIN_MS){ tJoin=now; sendJoin(); }   // B3
     return;
   }
-  digitalWrite(PIN_LED, linkUp()?HIGH:((now/500)%2));     // solid=linked, slow blink=offline
+  digitalWrite(PIN_LED, HIGH);
 
-  if(now - tData > DATA_MS){ tData=now; sendData(); }        // B2
-  if(now - tHb   > HEARTBEAT_MS){ tHb=now; sendHeartbeat(); } // B6
-  emergencyCheck();        // B7
+  if(now - tData > DATA_MS){ tData=now; sendData(); }
 }

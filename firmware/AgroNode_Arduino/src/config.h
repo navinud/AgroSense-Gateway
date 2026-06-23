@@ -17,11 +17,17 @@
 #define PIN_SERVO     25     // local emergency valve (or an LED)
 #define PIN_BTN        4     // re-bind button to GND (INPUT_PULLUP) — must be a pin WITH pullup
 #define PIN_LED        2     // onboard LED on most DevKits
-#define LORA_FREQ     433E6  // MUST match the ESP32 gateway
+#define LORA_FREQ     915E6  // MUST match the ESP32 gateway
 #define DHTTYPE       DHT11
 
+// ---- LoRa radio tuning ----
+#define LORA_SYNC_WORD    0x7A
+#define LORA_BANDWIDTH    125E3
+#define LORA_SPREADING    7
+#define LORA_CODING_RATE  5
+
 // ---- timing ----
-#define DATA_MS       3000   // send sensor data
+#define DATA_MS       5000   // send telemetry after bound
 #define HEARTBEAT_MS  5000   // B6 heartbeat
 #define JOIN_MS       2000   // JOIN retry while unbound
 #define LINK_TIMEOUT  12000  // no gateway downlink => link considered down (B8)
