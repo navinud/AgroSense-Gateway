@@ -55,6 +55,37 @@ void loraReceive(){
   }
 }
 
+// void loraReceive(){
+//   int sz=LoRa.parsePacket(); 
+  
+//   if(sz==0) return; // No packet, exit immediately
+  
+//   String s=""; while(LoRa.available()) s+=(char)LoRa.read();
+//   int rssi=LoRa.packetRssi();
+  
+//   if(pktField(s,0)!="AG") return;
+//   String type=pktField(s,1), uid=pktField(s,2), id=pktField(s,3), payload=pktField(s,4);
+
+//   Serial.println("\n📡 [LORA RX] Packet Caught!");
+//   Serial.print("   Raw Data: "); Serial.println(s);
+//   Serial.print("   RSSI: "); Serial.println(rssi);
+
+//   if(type=="J"){                                  // C1: new-node detection
+//     if(findNodeByUid(uid)<0) announceUnregistered(uid, rssi);
+//   }
+//   else if(type=="D" || type=="H"){
+//     int n=findNodeByField(id); if(n<0){ n=findNodeByUid(uid); }
+//     if(n>=0){
+//       registry[n].lastSeen=millis();
+//       if(!registry[n].online){ registry[n].online=true; publishAlert("info",registry[n].field.c_str(),"Node back ONLINE"); }
+//       if(type=="D") forwardNodeData(n, payload);
+//     }
+//   }
+
+//   // ---> THE FIX: Force the LoRa chip back into Continuous Listening Mode <---
+//   LoRa.receive(); 
+// }
+
 void announceUnregistered(const String& uid, int rssi){
   bool seen=false; for(int i=0;i<unregCount;i++) if(unregSeen[i]==uid) seen=true;
   if(!seen && unregCount<8) unregSeen[unregCount++]=uid;

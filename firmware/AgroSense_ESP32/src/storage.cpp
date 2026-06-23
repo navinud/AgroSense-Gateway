@@ -44,7 +44,7 @@ void eePush(const TelemetryRecord& r) {
   EEPROM.write(ADDR_HEAD, ee_head);
   EEPROM.write(ADDR_COUNT, ee_count);
   EEPROM.commit();  // flush to flash — safe on power cut
-  Serial.printf("EE push  head=%d  count=%d\n", ee_head, ee_count);
+  //Serial.printf("EE push  head=%d  count=%d\n", ee_head, ee_count);
 }
 
 bool eePop(TelemetryRecord& r) {

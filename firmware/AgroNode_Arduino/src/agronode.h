@@ -1,11 +1,11 @@
-// ===== agronode.h — shared declarations for the Uno PlatformIO build =====
+// ===== agronode.h — shared declarations for the ESP32 sub-node build =====
 #pragma once
 #include <Arduino.h>
 #include <SPI.h>
 #include <LoRa.h>
 #include <DHT.h>
 #include <EEPROM.h>
-#include <Servo.h>
+#include <ESP32Servo.h>      // <-- ESP32 servo lib (NOT the AVR Servo.h)
 #include "config.h"
 
 // ---- shared globals (defined in main.cpp) ----

@@ -69,7 +69,7 @@ void loop() {
   if (WiFi.status()!=WL_CONNECTED) wifiConnect();
   if (!mqtt.connected() && mqttConnect()) tDrain = millis(); // settle 500ms before first drain
   mqtt.loop();
-  delay(300);
+  delay(10);
 
   loraReceive();
 

@@ -16,7 +16,7 @@ void wifiConnect(){
     delay(100);
     started=true;
   }
-  Serial.printf("[WiFi] connecting to %s...\n", WIFI_SSID);
+  //Serial.printf("[WiFi] connecting to %s...\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -80,8 +80,8 @@ void saveTelemetry(){
   r.pMoist = (uint8_t)constrain((int)pMoist,    0, 255);
   r.pRain  = (int8_t) constrain((int)pRain,  -128, 127);
   r.pTime  = (int8_t) constrain((int)pTime,  -128, 127);
-  Serial.printf("[SAVE] moist=%d  temp=%.1f  hum=%d  score=%d\n",
-                r.moist, r.temp, r.hum, r.score);
+  //Serial.printf("[SAVE] moist=%d  temp=%.1f  hum=%d  score=%d\n",
+  //              r.moist, r.temp, r.hum, r.score);
   eePush(r);
 }
 
@@ -105,12 +105,12 @@ bool publishRecord(const TelemetryRecord& r){
   j += "\"score\":"+String(r.score)+",";
   j += "\"scoreparts\":{\"moisture\":"+String(r.pMoist)+",\"rain\":"+String(r.pRain)+",\"time\":"+String(r.pTime)+"}";
   j += "}";
-  Serial.printf("[SEND] moist=%d  temp=%.1f  hum=%d  score=%d  remaining=%d\n",
-                r.moist, r.temp, r.hum, r.score, eeCount());
-  Serial.print("[JSON] "); Serial.println(j);
+  //Serial.printf("[SEND] moist=%d  temp=%.1f  hum=%d  score=%d  remaining=%d\n",
+  //              r.moist, r.temp, r.hum, r.score, eeCount());
+  //Serial.print("[JSON] "); Serial.println(j);
   bool ok = mqtt.publish(topic, j.c_str());
   if (ok) {
-    Serial.println("[PUB] ok");
+    //Serial.println("[PUB] ok");
   } else {
     Serial.printf("[PUB] FAILED  state=%d\n", mqtt.state());
   }
