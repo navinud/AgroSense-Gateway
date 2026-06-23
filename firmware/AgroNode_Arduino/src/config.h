@@ -15,6 +15,11 @@
 #define PIN_DHT       17     // DHT11 data
 #define PIN_SOIL      34     // soil AO -> ADC1 (input-only pin, Wi-Fi safe)
 #define PIN_SERVO     25     // local emergency valve (or an LED)
+#define PIN_RAIN      35    
+#define PIN_LDR       32     // LDR analog input (ADC1 safe with Wi-Fi)
+// rain sensor ADC threshold (raw ADC 0..4095)
+#define RAIN_THRESHOLD_ADC 2000
+
 #define PIN_BTN        4     // re-bind button to GND (INPUT_PULLUP) — must be a pin WITH pullup
 #define PIN_LED        2     // onboard LED on most DevKits
 #define LORA_FREQ     915E6  // MUST match the ESP32 gateway

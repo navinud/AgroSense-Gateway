@@ -12,8 +12,8 @@ void emergencyCheck(){
   static bool emergency=false;
   bool disconnected = (millis()-lastGateway) > EMERGENCY_MS;
   if(disconnected && soil < DRY_TRIGGER){
-    if(!emergency){ emergency=true; setValve(true); Serial.println("[NODE] EMERGENCY irrigation ON"); }
+    if(!emergency){ emergency=true; setValve(true); }
   } else if(emergency){
-    emergency=false; setValve(false); Serial.println("[NODE] EMERGENCY irrigation OFF");
+    emergency=false; setValve(false);
   }
 }

@@ -20,6 +20,8 @@ String UID="";          // unique device id (persisted)
 String FIELD="";        // assigned id from gateway ("" = unbound)
 bool   bound=false;
 float  soil=0, temp=0, hum=0;
+float  light=0;
+bool   rain=false;
 bool   valveOpen=false;
 unsigned long lastGateway=0;   // last time we heard from gateway (link health, B8)
 
@@ -33,12 +35,9 @@ void setup(){
   valve.attach(PIN_SERVO); setValve(false);
   loadIdentity();          // UID + (maybe) FIELD from EEPROM
   loraInit();
-  Serial.print("Node UID="); Serial.print(UID);
-  Serial.print(" bound="); Serial.println(bound?FIELD:"NO");
-  if(bound){ Serial.print("[LoRa] node binded as "); Serial.println(FIELD); }
 }
 
-unsigned long tData=0, tJoin=0;
+unsigned long tData=0, tJoin=0, tHeartbeat=0;
 
 void loop(){
   checkRebindButton();     // B5
@@ -54,4 +53,5 @@ void loop(){
   digitalWrite(PIN_LED, HIGH);
 
   if(now - tData > DATA_MS){ tData=now; sendData(); }
+  if(now - tHeartbeat > HEARTBEAT_MS){ tHeartbeat=now; sendHeartbeat(); }
 }

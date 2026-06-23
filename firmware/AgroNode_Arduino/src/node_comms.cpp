@@ -27,7 +27,6 @@ void loraInit(){
   SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_SS);   // ESP32: bind the VSPI bus first
   LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
   if(!LoRa.begin(LORA_FREQ)){
-    Serial.println("[LoRa] init FAIL");
     while(1){ digitalWrite(PIN_LED,(millis()/100)%2); }
   }
 
@@ -36,8 +35,6 @@ void loraInit(){
   LoRa.setSpreadingFactor(LORA_SPREADING);
   LoRa.setCodingRate4(LORA_CODING_RATE);
   LoRa.receive();
-
-  Serial.println("[LoRa] connected");
 }
 
 void txRaw(const String& payload){
@@ -53,6 +50,7 @@ void txRaw(const String& payload){
 // }
 void txPacket(const char* type, const String& payload){
   String pkt="AG7X9K,"; pkt+=type; pkt+=","; pkt+=UID; pkt+=","; pkt+=FIELD; pkt+=","; pkt+=payload;
+  Serial.print("[LoRa] TX raw: "); Serial.println(pkt);
   LoRa.beginPacket(); LoRa.print(pkt); LoRa.endPacket();
   LoRa.receive();
 }
@@ -60,10 +58,6 @@ void txPacket(const char* type, const String& payload){
 // void sendJoin(){ txPacket("J", "hello"); }
 
 void sendJoin(){
-  LoRa.beginPacket();
-  LoRa.print("JOIN:" + UID);   // <-- THIS is the bug
-  LoRa.endPacket();
-  Serial.print("[LoRa] Sending JOIN UID="); Serial.println(UID);
   txPacket("J", "hello");
 }
 
@@ -75,13 +69,13 @@ void sendJoin(){
 
 void sendHeartbeat(){
   String payload = UID;
-  txPacket("HEARTBEAT", payload);
+  txPacket("H", payload);
 }
 
 
 void sendData(){
   String p = sensorPayload();   // builds "moist=..;temp=..;hum=.."
-  if(linkUp()){
+  if(true){
     Serial.print("[LoRa] data sending  "); Serial.println(p);
     txPacket("D", p);           // -> AG,D,DBB846,field_2,moist=..;temp=..;hum=..
   } else {
@@ -150,8 +144,6 @@ void loraReceive(){
   String s = "";
   while(LoRa.available()) s += (char)LoRa.read();
   s.trim();
-  Serial.print("[LoRa] RX="); Serial.print(s);
-  Serial.print(" RSSI="); Serial.println(LoRa.packetRssi());
 
   if(nthField(s,0) != "AG7X9K") return;
   String type = nthField(s,1), uid = nthField(s,2), id = nthField(s,3), payload = nthField(s,4);
@@ -162,7 +154,6 @@ void loraReceive(){
     FIELD = id;
     bound = true;
     saveIdentity();
-    Serial.print("[LoRa] node binded as "); Serial.println(FIELD);
     if(oCount > 0) bufFlush();
   }
   else if(type == "C"){             // valve command
@@ -205,7 +196,6 @@ void checkRebindButton(){
       for(int i=0;i<12;i++) EEPROM.write(EE_FIELD_ADDR+i,0);
       EEPROM.commit();                                      // <-- ESP32: persist
       bound=false; FIELD=""; oCount=0;
-      Serial.println("[LoRa] re-bind: cleared, entering JOIN");
       delay(300);
     }
   } else t=0;

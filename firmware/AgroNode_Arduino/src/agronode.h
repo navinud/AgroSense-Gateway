@@ -14,6 +14,8 @@ extern Servo  valve;
 extern String UID, FIELD;
 extern bool   bound, valveOpen;
 extern float  soil, temp, hum;
+extern float  light;
+extern bool   rain;
 extern unsigned long lastGateway;
 
 // ---- node_sensors.cpp ----
