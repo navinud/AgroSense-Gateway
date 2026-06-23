@@ -21,7 +21,7 @@
 #define DHTTYPE       DHT11
 
 // ---- LoRa radio tuning ----
-#define LORA_SYNC_WORD    0x7A
+#define LORA_SYNC_WORD    0x34
 #define LORA_BANDWIDTH    125E3
 #define LORA_SPREADING    7
 #define LORA_CODING_RATE  5

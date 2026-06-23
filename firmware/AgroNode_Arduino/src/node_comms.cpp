@@ -47,75 +47,127 @@ void txRaw(const String& payload){
   LoRa.receive();
 }
 
+// void txPacket(const char* type, const String& payload){
+//   String pkt = String(type) + ":" + payload;
+//   txRaw(pkt);
+// }
 void txPacket(const char* type, const String& payload){
-  String pkt = String(type) + ":" + payload;
-  txRaw(pkt);
+  String pkt="AG7X9K,"; pkt+=type; pkt+=","; pkt+=UID; pkt+=","; pkt+=FIELD; pkt+=","; pkt+=payload;
+  LoRa.beginPacket(); LoRa.print(pkt); LoRa.endPacket();
+  LoRa.receive();
 }
 
+// void sendJoin(){ txPacket("J", "hello"); }
+
 void sendJoin(){
-  String payload = UID;
+  LoRa.beginPacket();
+  LoRa.print("JOIN:" + UID);   // <-- THIS is the bug
+  LoRa.endPacket();
   Serial.print("[LoRa] Sending JOIN UID="); Serial.println(UID);
-  txPacket("JOIN", payload);
+  txPacket("J", "hello");
 }
+
+// void sendJoin(){
+//   String payload = UID;
+//   Serial.print("[LoRa] Sending JOIN UID="); Serial.println(UID);
+//   txPacket("JOIN", payload);
+// }
 
 void sendHeartbeat(){
   String payload = UID;
   txPacket("HEARTBEAT", payload);
 }
 
-void sendData(){
-  String json = "{";
-  json += "\"uid\":\"" + UID + "\",";
-  json += "\"field\":\"" + FIELD + "\",";
-  json += "\"temp\":" + String(temp, 1) + ",";
-  json += "\"hum\":" + String(hum, 1) + ",";
-  json += "\"moist\":" + String((int)soil) + ",";
-  json += "\"timestamp\":" + String(millis());
-  json += "}";
 
-  Serial.println("[LoRa] Sending telemetry");
-  txRaw(json);
+void sendData(){
+  String p = sensorPayload();   // builds "moist=..;temp=..;hum=.."
+  if(linkUp()){
+    Serial.print("[LoRa] data sending  "); Serial.println(p);
+    txPacket("D", p);           // -> AG,D,DBB846,field_2,moist=..;temp=..;hum=..
+  } else {
+    bufPush(p);
+  }
 }
+// void sendData(){
+//   String json = "{";
+//   json += "\"uid\":\"" + UID + "\",";
+//   json += "\"field\":\"" + FIELD + "\",";
+//   json += "\"temp\":" + String(temp, 1) + ",";
+//   json += "\"hum\":" + String(hum, 1) + ",";
+//   json += "\"moist\":" + String((int)soil) + ",";
+//   json += "\"timestamp\":" + String(millis());
+//   json += "}";
+
+//   Serial.println("[LoRa] Sending telemetry");
+//   txRaw(json);
+// }
+
+// void loraReceive(){
+//   int sz = LoRa.parsePacket();
+//   if(sz == 0) return;
+
+//   String packet = "";
+//   while(LoRa.available()) packet += (char)LoRa.read();
+//   packet.trim();
+
+//   Serial.print("[LoRa] RX=");
+//   Serial.print(packet);
+//   Serial.print(" RSSI=");
+//   Serial.println(LoRa.packetRssi());
+
+//   if(packet.startsWith("ASSIGN:")){
+//     int firstSep = packet.indexOf(':');
+//     int secondSep = packet.indexOf(':', firstSep + 1);
+//     if(firstSep < 0 || secondSep < 0){
+//       Serial.println("[LoRa] ASSIGN packet malformed");
+//       return;
+//     }
+
+//     String packetUid = packet.substring(firstSep + 1, secondSep);
+//     String packetField = packet.substring(secondSep + 1);
+//     packetUid.trim();
+//     packetField.trim();
+
+//     if(packetUid != UID){
+//       Serial.println("[LoRa] ASSIGN packet for different UID");
+//       return;
+//     }
+
+//     FIELD = packetField;
+//     bound = true;
+//     saveIdentity();
+//     lastGateway = millis();
+
+//     Serial.print("[LoRa] Assigned ");
+//     Serial.println(FIELD);
+//     return;
+//   }
+// }
 
 void loraReceive(){
   int sz = LoRa.parsePacket();
   if(sz == 0) return;
+  String s = "";
+  while(LoRa.available()) s += (char)LoRa.read();
+  s.trim();
+  Serial.print("[LoRa] RX="); Serial.print(s);
+  Serial.print(" RSSI="); Serial.println(LoRa.packetRssi());
 
-  String packet = "";
-  while(LoRa.available()) packet += (char)LoRa.read();
-  packet.trim();
+  if(nthField(s,0) != "AG7X9K") return;
+  String type = nthField(s,1), uid = nthField(s,2), id = nthField(s,3), payload = nthField(s,4);
+  if(uid != UID) return;            // not addressed to us
+  lastGateway = millis();
 
-  Serial.print("[LoRa] RX=");
-  Serial.print(packet);
-  Serial.print(" RSSI=");
-  Serial.println(LoRa.packetRssi());
-
-  if(packet.startsWith("ASSIGN:")){
-    int firstSep = packet.indexOf(':');
-    int secondSep = packet.indexOf(':', firstSep + 1);
-    if(firstSep < 0 || secondSep < 0){
-      Serial.println("[LoRa] ASSIGN packet malformed");
-      return;
-    }
-
-    String packetUid = packet.substring(firstSep + 1, secondSep);
-    String packetField = packet.substring(secondSep + 1);
-    packetUid.trim();
-    packetField.trim();
-
-    if(packetUid != UID){
-      Serial.println("[LoRa] ASSIGN packet for different UID");
-      return;
-    }
-
-    FIELD = packetField;
+  if(type == "A"){                  // assignment from gateway
+    FIELD = id;
     bound = true;
     saveIdentity();
-    lastGateway = millis();
-
-    Serial.print("[LoRa] Assigned ");
-    Serial.println(FIELD);
-    return;
+    Serial.print("[LoRa] node binded as "); Serial.println(FIELD);
+    if(oCount > 0) bufFlush();
+  }
+  else if(type == "C"){             // valve command
+    String v = cmdVal(payload, "valve");
+    if(v.length()) setValve(v == "ON");
   }
 }
 
