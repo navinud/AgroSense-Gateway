@@ -1,89 +1,134 @@
 #include "agro.h"
-/* ===== comms.ino — A9 (wifi+mqtt), A10 (offline buffer), A11 (circular log/replay) ===== */
-
-// circular / offline buffer of telemetry payloads (A10/A11)
-String  buf[BUF_SIZE]; String bufTopic[BUF_SIZE];
-int     bufHead=0, bufCount=0;
-
-void bufPush(const String& topic, const String& payload){
-  buf[bufHead]=payload; bufTopic[bufHead]=topic;
-  bufHead=(bufHead+1)%BUF_SIZE;
-  if(bufCount<BUF_SIZE) bufCount++;
-  Serial.print("BUFFERED, count="); Serial.println(bufCount);
-}
-
-void bufReplay(){
-  int n = bufCount;                       // capture before anything changes it
-  if(n == 0){ Serial.println("REPLAY: nothing to send"); return; }
-  Serial.print("REPLAYING "); Serial.print(n); Serial.println(" buffered msgs");
-  int idx = (bufHead - n + BUF_SIZE) % BUF_SIZE;
-  for(int i=0;i<n;i++){
-    bool ok = mqtt.publish(bufTopic[idx].c_str(), buf[idx].c_str());
-    Serial.print("  replay "); Serial.print(i+1); Serial.print("/"); Serial.print(n);
-    Serial.println(ok ? " sent" : " FAILED");
-    idx = (idx+1) % BUF_SIZE;
-    mqtt.loop();                          // keep the MQTT client serviced
-    delay(60);                            // pace it — public broker throttles bursts
-  }
-  bufCount = 0;                           // clear only AFTER successfully sending
-}
+/* ===== comms.cpp — WiFi/MQTT, EEPROM-queue telemetry (A9/A10/A11) ===== */
 
 void wifiConnect(){
   static unsigned long lastTry=0;
+  static bool started=false;
   if(WiFi.status()==WL_CONNECTED) return;
-  if(millis()-lastTry < 2000) return;   // nudge every 2s; autoReconnect does the rest
+  // don't interrupt an ongoing association attempt (255 = not yet started, let it through)
+  if(WiFi.status()==WL_IDLE_STATUS) return;
+  if(millis()-lastTry < 10000) return;
   lastTry=millis();
+  if(!started){
+    WiFi.mode(WIFI_STA);
+    WiFi.persistent(false);   // don't load/save old credentials from flash
+    WiFi.disconnect(true);    // clear any stored network
+    delay(100);
+    started=true;
+  }
+  Serial.printf("[WiFi] connecting to %s...\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
-void mqttConnect(){
+// called from loop() — prints once on state change
+void wifiStatusPrint(){
+  static wl_status_t last = WL_IDLE_STATUS;
+  wl_status_t now = WiFi.status();
+  if(now == last) return;
+  last = now;
+  if(now == WL_CONNECTED)
+    Serial.printf("[WiFi] connected  IP=%s\n", WiFi.localIP().toString().c_str());
+  else if(now == WL_NO_SSID_AVAIL)
+    Serial.printf("[WiFi] SSID '%s' not found\n", WIFI_SSID);
+  else if(now == WL_CONNECT_FAILED)
+    Serial.println("[WiFi] connect failed (wrong password?)");
+  else
+    Serial.printf("[WiFi] status=%d\n", (int)now);
+}
+
+bool mqttConnect(){
   static unsigned long lastTry=0;
-  if(WiFi.status()!=WL_CONNECTED || mqtt.connected()) return;
-  if(millis()-lastTry < 2000) return;    // retry every 2s instead of waiting
+  if(WiFi.status()!=WL_CONNECTED || mqtt.connected()) return false;
+  if(millis()-lastTry < 2000) return false;
   lastTry=millis();
-  mqtt.setSocketTimeout(2);              // cap the blocking attempt at 2s
-  mqtt.setKeepAlive(10);                 // detect a dead link in ~10s not 15s
+  mqtt.setSocketTimeout(2);
+  mqtt.setKeepAlive(10);
   String cid = String(MQTT_CLIENT) + "-" + String((uint32_t)ESP.getEfuseMac(), HEX);
-  if(mqtt.connect(cid.c_str())){
+  Serial.printf("[MQTT] connecting to %s:%d ...\n", MQTT_HOST, MQTT_PORT);
+  if(mqtt.connect(cid.c_str(), NULL, NULL, T_STATUS_GW, 1, true, "OFFLINE")){
+    mqtt.publish(T_STATUS_GW, "ONLINE", true);
     mqtt.subscribe(T_CMD_VALVE); mqtt.subscribe(T_CMD_MODE);
     mqtt.subscribe(T_CMD_THR);   mqtt.subscribe(T_CMD_BIND);
     mqtt.subscribe(T_CMD_WX);
-    Serial.println("MQTT OK");
-    // subscribes...
-    if(bufCount>0) bufReplay();      // only here, only on success
+    Serial.printf("[MQTT] connected — %d record(s) queued\n", eeCount());
+    return true;
   }
+  Serial.printf("[MQTT] failed  rc=%d  (%s)\n", mqtt.state(),
+    mqtt.state()==-4 ? "timeout/broker too slow" :
+    mqtt.state()==-3 ? "connection lost" :
+    mqtt.state()==-2 ? "broker unreachable (firewall/IP?)" :
+    mqtt.state()==-1 ? "disconnected" :
+    mqtt.state()== 1 ? "bad protocol" :
+    mqtt.state()== 2 ? "bad client ID" :
+    mqtt.state()== 3 ? "broker unavailable" :
+    mqtt.state()== 4 ? "bad credentials" :
+    mqtt.state()== 5 ? "not authorised" : "unknown");
+  return false;
 }
 
-void publishJSON(const char* topic, const String& json){
-  if(mqtt.connected()) mqtt.publish(topic, json.c_str());
-  else                 bufPush(topic, json);   // A10: store if offline
+// Pack current globals into an EEPROM record — called every 2 s regardless of connectivity
+void saveTelemetry(){
+  TelemetryRecord r;
+  r.temp   = temp;
+  r.hum    = (uint8_t)constrain((int)hum,      0, 255);
+  r.moist  = (uint8_t)constrain((int)moistInst, 0, 100);
+  r.light  = (uint8_t)constrain((int)light,     0, 100);
+  r.rain   = rain   ? 1 : 0;
+  r.score  = (uint8_t)constrain(score,          0, 100);
+  r.valve  = valveOpen ? 1 : 0;
+  r.mode   = (selfMode == "MANUAL") ? 1 : 0;
+  r.pMoist = (uint8_t)constrain((int)pMoist,    0, 255);
+  r.pRain  = (int8_t) constrain((int)pRain,  -128, 127);
+  r.pTime  = (int8_t) constrain((int)pTime,  -128, 127);
+  Serial.printf("[SAVE] moist=%d  temp=%.1f  hum=%d  score=%d\n",
+                r.moist, r.temp, r.hum, r.score);
+  eePush(r);
 }
 
-// build + publish this ESP32's own field telemetry (A9)
-void publishSelfTelemetry(){
-  char topic[48]; snprintf(topic,sizeof(topic),T_TELEM_FMT,SELF_FIELD);
+// Reconstruct JSON from a stored record and publish — called by drain loop in main
+bool publishRecord(const TelemetryRecord& r){
+  if (!mqtt.connected()) {
+    Serial.println("[PUB] skip — not connected");
+    return false;
+  }
+  char topic[48]; snprintf(topic, sizeof(topic), T_TELEM_FMT, SELF_FIELD);
   String j = "{";
   j += "\"uid\":\"ESP32-SELF\",";
   j += "\"name\":\""+String(SELF_NAME)+"\",";
-  j += "\"temp\":"+String(temp,1)+",";
-  j += "\"hum\":"+String((int)hum)+",";
-  j += "\"moist\":"+String((int)moist)+",";
-  j += "\"light\":"+String((int)light)+",";
-  j += "\"rain\":"+String(rain?"true":"false")+",";
-  j += "\"valve\":\""+String(valveOpen?"ON":"OFF")+"\",";
-  j += "\"mode\":\""+selfMode+"\",";
-  j += "\"score\":"+String(score)+",";
-  j += "\"scoreparts\":{\"moisture\":"+String(pMoist,0)+",\"rain\":"+String(pRain,0)+",\"time\":"+String(pTime,0)+"}";
+  j += "\"temp\":"+String(r.temp, 1)+",";
+  j += "\"hum\":"+String(r.hum)+",";
+  j += "\"moist\":"+String(r.moist)+",";
+  j += "\"light\":"+String(r.light)+",";
+  j += "\"rain\":"+String(r.rain ? "true" : "false")+",";
+  j += "\"valve\":\""+String(r.valve ? "ON" : "OFF")+"\",";
+  j += "\"mode\":\""+String(r.mode ? "MANUAL" : "AUTO")+"\",";
+  j += "\"score\":"+String(r.score)+",";
+  j += "\"scoreparts\":{\"moisture\":"+String(r.pMoist)+",\"rain\":"+String(r.pRain)+",\"time\":"+String(r.pTime)+"}";
   j += "}";
-  publishJSON(topic, j);
+  Serial.printf("[SEND] moist=%d  temp=%.1f  hum=%d  score=%d  remaining=%d\n",
+                r.moist, r.temp, r.hum, r.score, eeCount());
+  Serial.print("[JSON] "); Serial.println(j);
+  bool ok = mqtt.publish(topic, j.c_str());
+  if (ok) {
+    Serial.println("[PUB] ok");
+  } else {
+    Serial.printf("[PUB] FAILED  state=%d\n", mqtt.state());
+  }
+  return ok;
+}
+
+// Used by lora_gw.cpp for remote node telemetry (arbitrary topic/JSON, no EEPROM buffering)
+void publishJSON(const char* topic, const String& json){
+  if(mqtt.connected()) mqtt.publish(topic, json.c_str());
 }
 
 void publishAlert(const char* level, const char* node, const char* msgtxt){
+  if(!mqtt.connected()) return;
   String j="{\"level\":\""+String(level)+"\",\"node\":\""+String(node)+"\",\"msg\":\""+String(msgtxt)+"\"}";
-  if(mqtt.connected()) mqtt.publish(T_ALERTS, j.c_str());
+  mqtt.publish(T_ALERTS, j.c_str());
 }
 
-// ---- command handler (A9 subscribe; E3) ----
+// ---- command handler ----
 String jsonStr(const String& s, const String& key){
   int k=s.indexOf("\""+key+"\""); if(k<0) return "";
   int c=s.indexOf(':',k); int q1=s.indexOf('"',c+1);
@@ -98,7 +143,7 @@ void onMqtt(char* topic, byte* payload, unsigned int len){
   if(t==T_CMD_VALVE){
     String st=jsonStr(p,"state");
     if(field==SELF_FIELD){ selfMode="MANUAL"; setValve(st=="ON"); }
-    else loraSendCommand(field, "valve="+st);          // forward to remote node
+    else loraSendCommand(field, "valve="+st);
   }
   else if(t==T_CMD_MODE){
     String m=jsonStr(p,"mode");
@@ -108,11 +153,11 @@ void onMqtt(char* topic, byte* payload, unsigned int len){
   else if(t==T_CMD_THR){
     int mi=p.indexOf("\"moist\""); if(mi>=0){ thrMoist=p.substring(p.indexOf(':',mi)+1).toInt(); }
   }
-  else if(t==T_CMD_BIND){                                // C3 -> assign + push to node
+  else if(t==T_CMD_BIND){
     String uid=jsonStr(p,"uid"), name=jsonStr(p,"name");
     bindNode(uid, name);
   }
-  else if(t==T_CMD_WX){                                  // weather hint from dashboard (A5/D3)
+  else if(t==T_CMD_WX){
     rainSoon = (p.indexOf("true")>=0);
   }
 }

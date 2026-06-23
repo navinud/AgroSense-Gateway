@@ -3,11 +3,11 @@
 #pragma once
 
 // ---- Wi-Fi ----
-#define WIFI_SSID      "iPhone"
-#define WIFI_PASS      "aaaaaaaa"
+#define WIFI_SSID      "HUAWEI nova Y61"
+#define WIFI_PASS      "12345678"
 
 // ---- MQTT broker (the PC running Node-RED/Mosquitto) ----
-#define MQTT_HOST "test.mosquitto.org"   // <-- your broker IP (run `ipconfig`/`hostname -I`)
+#define MQTT_HOST "192.168.43.155"   // <-- your broker IP (run `ipconfig`/`hostname -I`)
 #define MQTT_PORT      1883
 #define MQTT_CLIENT    "agrosense-esp32"
 
@@ -15,30 +15,32 @@
 #define SELF_FIELD     "field_1"
 #define SELF_NAME      "Field A (ESP32)"
 
-// ---- Pins (ESP32 DevKit v1). All analog pins are ADC1 (Wi-Fi safe). ----
-#define PIN_DHT        4
+// ---- Pins (Heltec WiFi LoRa 32 V2). All analog pins are ADC1 (Wi-Fi safe). ----
+#define PIN_DHT        17   // moved from 4 — GPIO4 is OLED SDA on Heltec V2
 #define PIN_SOIL       33   // analog, input-only
 #define PIN_RAIN       35   // analog (AO of rain board), input-only
 #define PIN_LDR        32   // analog
 #define PIN_SERVO      13
-#define OLED_SDA       21
-#define OLED_SCL       22
+#define OLED_SDA       4    // Heltec V2 built-in OLED
+#define OLED_SCL       15   // Heltec V2 built-in OLED
+#define OLED_RST       16   // Heltec V2 built-in OLED
 
-// ---- LoRa (SPI) ----
-#define LORA_SCK       18
+// ---- LoRa (Heltec WiFi LoRa 32 V2 — internal SX1276, do NOT wire) ----
+#define LORA_SCK       5
 #define LORA_MISO      19
-#define LORA_MOSI      23
-#define LORA_SS        5
+#define LORA_MOSI      27
+#define LORA_SS        18    // Heltec uses GPIO18 for CS (not 5)
 #define LORA_RST       14
-#define LORA_DIO0      2
-#define LORA_FREQ      433E6   // Ra-02 = 433 MHz. Use 868E6/915E6 per region.
+#define LORA_DIO0      26    // Heltec uses GPIO26 (not 2)
+#define LORA_FREQ      433E6 // set to YOUR board's variant: 433E6 / 868E6 / 915E6
 
 // ---- Behaviour ----
 #define MA_N           3      // moving-average window (A3, configurable)
 #define PUBLISH_MS     2000   // telemetry period
 #define OLED_MS        1000
 #define HEARTBEAT_TIMEOUT 15000  // node OFFLINE if silent this long (A13)
-#define BUF_SIZE       20     // circular/offline buffer depth (A10/A11)
+#define MAX_EE_RECORDS 150    // 5 min × 30 reads/min — EEPROM queue depth
+#define EEPROM_SIZE    4096   // bytes allocated in flash
 #define DHTTYPE        DHT11
 
 // ---- Sensor calibration (tune to your probes) ----
@@ -49,13 +51,13 @@
 #define LDR_BRIGHT_ADC 3000
 
 // ---- MQTT topics (must match the Node-RED dashboard) ----
-#define T_TELEM_FMT    "smartfarm/%s/telemetry"
-#define T_REG_NODES    "smartfarm/registry/nodes"
-#define T_REG_UNREG    "smartfarm/registry/unregistered"
-#define T_ALERTS       "smartfarm/alerts"
-#define T_CMD_VALVE    "smartfarm/cmd/valve"
-#define T_CMD_MODE     "smartfarm/cmd/mode"
-#define T_CMD_THR      "smartfarm/cmd/threshold"
-#define T_CMD_BIND     "smartfarm/cmd/bind"
-#define T_CMD_WX       "smartfarm/cmd/weather"
-#define T_STATUS_GW    "smartfarm/status/gateway"
+#define T_TELEM_FMT    "agro7x9k/%s/telemetry"
+#define T_REG_NODES    "agro7x9k/registry/nodes"
+#define T_REG_UNREG    "agro7x9k/registry/unregistered"
+#define T_ALERTS       "agro7x9k/alerts"
+#define T_CMD_VALVE    "agro7x9k/cmd/valve"
+#define T_CMD_MODE     "agro7x9k/cmd/mode"
+#define T_CMD_THR      "agro7x9k/cmd/threshold"
+#define T_CMD_BIND     "agro7x9k/cmd/bind"
+#define T_CMD_WX       "agro7x9k/cmd/weather"
+#define T_STATUS_GW    "agro7x9k/status/gateway"

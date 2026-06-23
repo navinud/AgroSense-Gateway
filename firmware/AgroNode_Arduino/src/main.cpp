@@ -1,52 +1,53 @@
-#include "agronode.h"
-/* =====================================================================
-   AgroNode — Arduino Uno + LoRa Remote Node   (Sections B, E, F)
-   Modules (F5):  this file   = orchestration
-                  node_sensors.ino = B1 (read)
-                  node_comms.ino   = B2/B3/B4/B5/B6/B8 (LoRa, join, bind, buffer)
-                  node_logic.ino   = B7 (emergency irrigation)
-   Libraries: LoRa (sandeepmistry), DHT sensor library + Adafruit Unified
-              Sensor, Servo (builtin), EEPROM (builtin).
-   ===================================================================== */
+#include <Arduino.h>
+#include <SPI.h>
+#include <LoRa.h>
 
-DHT    dht(PIN_DHT, DHTTYPE);
-Servo  valve;
+// --- MATCH THESE PINS EXACTLY TO YOUR WIRING ---
+// SPI Bus (Hardware defined on Uno, do not change these on the board)
 
-String UID="";          // unique device id (persisted)
-String FIELD="";        // assigned id from gateway ("" = unbound)
-bool   bound=false;
-float  soil=0, temp=0, hum=0;
-bool   valveOpen=false;
-unsigned long lastGateway=0;   // last time we heard from gateway (link health, B8)
+#define MISO  19
+#define MOSI  23
+#define SCK   18
 
-void setup(){
-  Serial.begin(9600);
-  pinMode(PIN_BTN, INPUT_PULLUP);
-  pinMode(PIN_LED, OUTPUT);
-  dht.begin();
-  valve.attach(PIN_SERVO); setValve(false);
-  loadIdentity();          // UID + (maybe) FIELD from EEPROM
-  loraInit();
-  Serial.print("Node UID="); Serial.print(UID);
-  Serial.print(" bound="); Serial.println(bound?FIELD:"NO");
+// Control Pins (Match these to your specific jumper wires)
+#define LORA_SS    5  // NSS / CS
+#define LORA_RST   14   // Reset
+#define LORA_DIO0  26   // Interrupt
+
+// 433 MHz is standard for SX1278 in Asia/Europe. 
+// Change to 915E6 if you bought a 915MHz US version.
+#define LORA_FREQ 915E6 
+
+void setup() {
+  // Start the serial monitor
+  Serial.begin(115200);
+  while (!Serial); // Wait for Serial to be ready (needed for some boards)
+  
+  Serial.println("\n--- LoRa Hardware Diagnostic Test ---");
+  Serial.println("Attempting to initialize LoRa radio...");
+
+  // Tell the LoRa library which pins we are using
+  LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
+
+  // Attempt to start the radio
+  if (!LoRa.begin(LORA_FREQ)) {
+    Serial.println("");
+    Serial.println("❌ FAILED! LoRa radio not found.");
+    
+    // Stop the program completely
+    while (1); 
+  }
+
+  // If we get past the 'begin' function, it works!
+  Serial.println("");
+  Serial.println("✅ SUCCESS! LoRa Gateway is UP.");
+  Serial.println("The Arduino is successfully communicating with the SX1278 chip.");
+  
+  // Set a sync word just to prove we can write to its memory
+  LoRa.setSyncWord(0x12);
 }
 
-unsigned long tData=0, tHb=0, tJoin=0;
-
-void loop(){
-  checkRebindButton();     // B5
-  loraReceive();           // assign / commands
-  readSensors();           // B1
-
-  unsigned long now=millis();
-  if(!bound){
-    digitalWrite(PIN_LED, (now/250)%2);     // fast blink = JOIN mode
-    if(now - tJoin > JOIN_MS){ tJoin=now; sendJoin(); }   // B3
-    return;
-  }
-  digitalWrite(PIN_LED, linkUp()?HIGH:((now/500)%2));     // solid=linked, slow blink=offline
-
-  if(now - tData > DATA_MS){ tData=now; sendData(); }       // B2
-  if(now - tHb   > HEARTBEAT_MS){ tHb=now; sendHeartbeat(); } // B6
-  emergencyCheck();        // B7
+void loop() {
+  // Nothing to do in the loop for a hardware test
+  delay(1000);
 }

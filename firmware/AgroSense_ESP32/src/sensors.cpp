@@ -45,12 +45,16 @@ void readSensors(){
   // --- moving average (A3) ---
   maSoil[maIdx]=soilPct; maTemp[maIdx]=temp;
   maIdx=(maIdx+1)%MA_N; if(maIdx==0) maFilled=true;
+  moistInst = soilPct;
   moist = movingAvg(maSoil);
   light = lightPct;
 }
 
 // ---- OLED (A2) ----
 void oledInit(){
+  pinMode(OLED_RST, OUTPUT);
+  digitalWrite(OLED_RST, LOW);  delay(20);
+  digitalWrite(OLED_RST, HIGH); delay(20);
   if(!oled.begin(SSD1306_SWITCHCAPVCC, 0x3C)){ Serial.println("OLED fail"); return; }
   oled.clearDisplay(); oled.setTextColor(SSD1306_WHITE);
   oled.setTextSize(1); oled.setCursor(0,0);
@@ -58,11 +62,21 @@ void oledInit(){
 }
 void oledShow(){
   oled.clearDisplay(); oled.setCursor(0,0);
-  oled.printf("AgroSense  %s\n", selfMode.c_str());
-  oled.printf("T:%.1fC  H:%.0f%%\n", temp, hum);
-  oled.printf("Soil:%.0f%%  L:%.0f%%\n", moist, light);
-  oled.printf("Rain:%s  Scr:%d\n", rain?"YES":"no", score);
-  oled.printf("Valve: %s\n", valveOpen?"OPEN":"CLOSED");
-  if(sensorFault) oled.print("** SENSOR FAULT **");
+  oled.println("AgroSense V2");
+  oled.println("------------");
+
+  bool wifiOk = (WiFi.status() == WL_CONNECTED);
+  if (wifiOk) {
+    oled.println("WiFi: Connected");
+    oled.println(WiFi.localIP().toString().c_str());
+  } else {
+    oled.println("WiFi: Connecting...");
+    oled.println(WIFI_SSID);
+  }
+
+  oled.println();
+  oled.print("MQTT: ");
+  oled.println(mqtt.connected() ? "Connected" : "Waiting...");
+
   oled.display();
 }
